@@ -73,7 +73,8 @@ class ImageProcessor:
             area = cv2.contourArea(max_contour)
             
             # Lower threshold to detect hand earlier
-            if area > 1000: 
+            # Increased to 4000 to prevent background noise from triggering "Blue" (Hand Detected) state
+            if area > 4000: 
                 # Distance Logic: Map Area Ratio to Width
                 frame_area = proc_frame.shape[0] * proc_frame.shape[1]
                 ratio = area / frame_area

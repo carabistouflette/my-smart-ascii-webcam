@@ -92,10 +92,13 @@ class ImageProcessor:
                     frame_area = proc_frame.shape[0] * proc_frame.shape[1]
                     ratio = area / frame_area
                     
-                    norm_dist = math.sqrt(ratio) # 0.1 to 0.7 typically
+                    # More aggressive scaling for visible effect
+                    # Far (small ratio ~0.02) -> 20 chars (very blocky)
+                    # Close (large ratio ~0.5) -> 400 chars (detailed)
+                    norm_dist = math.sqrt(ratio)
                     
-                    raw_target_width = int(20 + (norm_dist * 400))
-                    raw_target_width = max(40, min(raw_target_width, 320))
+                    raw_target_width = int(20 + (norm_dist * 600))
+                    raw_target_width = max(20, min(raw_target_width, 400))
                     
                     # Gesture Logic using Hull Ratio
                     # Fist is compact (hull area ~ contour area)

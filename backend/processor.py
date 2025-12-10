@@ -15,7 +15,7 @@ class ImageProcessor:
         
         # Smoothing History
         self.res_history = deque(maxlen=5) # Smooth resolution (Responsive)
-        self.theme_history = deque(maxlen=25) # Debounce theme (More Stable)
+        self.theme_history = deque(maxlen=15) # Debounce theme
 
     def frame_to_ascii(self, frame, width=100):
         # 1. Resize
@@ -72,8 +72,8 @@ class ImageProcessor:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Lower threshold to detect hand from far away
-            if area > 2000: 
+            # Balance: detect far hand but filter noise
+            if area > 3500: 
                 # Filter out face: Check if contour is in the TOP 40% of the frame
                 # Face is usually at the top, hand is usually in the middle/bottom
                 M = cv2.moments(max_contour)

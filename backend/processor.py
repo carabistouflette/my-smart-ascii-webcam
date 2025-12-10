@@ -14,43 +14,31 @@ class ImageProcessor:
     def frame_to_ascii(self, frame, width=100):
         # 1. Resize
         height, orig_width = frame.shape[:2]
+        # Aspect ratio correction for typical fonts (approx 0.55 height/width)
         aspect_ratio = height / orig_width
         new_height = int(width * aspect_ratio * 0.55) 
         resized = cv2.resize(frame, (width, new_height))
         
-        # 2. Edge Detection (Sobel) for "Precision" look
+        # 2. Grayscale & Contrast enhancement (CLAHE)
+        # This makes details visible even in bad lighting
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-        gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        mag, angle = cv2.cartToPolar(gx, gy, angleInDegrees=True)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        gray = clahe.apply(gray)
         
         # 3. Map to characters
+        # Using a ramp that has good visual weight distribution
+        # " " is black. "@" is white (full pixel density).
+        chars = [" ", ".", ":", "-", "=", "+", "*", "#", "%", "@"]
+        
         lines = []
         rows, cols = gray.shape
-        
-        # Edge threshold
-        edge_thresh = 150
         
         for r in range(rows):
             line = ""
             for c in range(cols):
-                pixel_mag = mag[r, c]
                 pixel_val = gray[r, c]
-                
-                if pixel_mag > edge_thresh:
-                    # Use directional edges
-                    ang = angle[r, c] % 180
-                    if 45 <= ang < 135:
-                        char = "|"
-                    elif 0 <= ang < 45 or 135 <= ang < 180:
-                        char = "-" # or _
-                    else:
-                        char = "+"
-                else:
-                    # Use density
-                    idx = int(pixel_val / 255 * (len(self.ascii_chars) - 1))
-                    char = self.ascii_chars[idx]
-                line += char
+                idx = int(pixel_val / 255 * (len(chars) - 1))
+                line += chars[idx]
             lines.append(line)
             
         return lines
@@ -58,7 +46,7 @@ class ImageProcessor:
     def process(self, frame):
         # Downscale for analysis (Speed)
         proc_frame = cv2.resize(frame, (320, 240))
-        proc_frame = cv2.GaussianBlur(proc_frame, (5, 5), 0) # Reduce noise
+        proc_frame = cv2.GaussianBlur(proc_frame, (5, 5), 0)
         
         # Convert to YCrCb for skin detection
         ycrcb = cv2.cvtColor(proc_frame, cv2.COLOR_BGR2YCrCb)
@@ -66,27 +54,26 @@ class ImageProcessor:
         
         # Clean mask
         kernel = np.ones((3,3), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel) # Remove specks
-        mask = cv2.dilate(mask, kernel, iterations=1)         # Fill holes
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.dilate(mask, kernel, iterations=1)
         
-        # Find contours
         contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        target_width = 80
+        # Base resolution higher for better readability
+        target_width = 120 
         color_theme = "default"
         
         if contours:
-            # Find largest contour (Hand) used to ignore face/bg
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Simple heuristic: Hands are usually central or bottom. Faces are top.
-            # But let's just stick to area for now.
             if area > 3000: 
                 # Distance Logic
                 ratio = area / (proc_frame.shape[0] * proc_frame.shape[1])
-                ratio = max(0.0, min(ratio, 0.6))
-                target_width = int(60 + (ratio * 150)) # Less aggressive scaling
+                ratio = max(0.0, min(ratio, 0.8))
+                
+                # Dynamic Resolution: 120 (Far) -> 250 (Close)
+                target_width = int(120 + (ratio * 130))
                 
                 # Gesture Logic
                 hull = cv2.convexHull(max_contour)
@@ -103,8 +90,7 @@ class ImageProcessor:
                             end = tuple(max_contour[e][0])
                             far = tuple(max_contour[f][0])
                             
-                            # Filter small defects (noise between fingers)
-                            if d > 1000: # Depth threshold
+                            if d > 1000:
                                 a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
                                 b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
                                 c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
@@ -113,9 +99,9 @@ class ImageProcessor:
                                     count_defects += 1
                     
                     if count_defects >= 3:
-                        color_theme = "neon-green" # Open
+                        color_theme = "neon-green"
                     elif count_defects == 0:
-                        color_theme = "neon-red"   # Fist
+                        color_theme = "neon-red"
                     else:
                         color_theme = "neon-blue"
                         

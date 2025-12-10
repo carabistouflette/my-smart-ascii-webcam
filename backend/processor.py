@@ -15,7 +15,7 @@ class ImageProcessor:
         
         # Smoothing History
         self.res_history = deque(maxlen=5) # Smooth resolution (Responsive)
-        self.theme_history = deque(maxlen=15) # Debounce theme (Stable)
+        self.theme_history = deque(maxlen=25) # Debounce theme (More Stable)
 
     def frame_to_ascii(self, frame, width=100):
         # 1. Resize
@@ -72,8 +72,8 @@ class ImageProcessor:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Increased threshold to prevent background noise from triggering hand detection
-            if area > 10000: 
+            # Threshold to prevent noise but still detect hand
+            if area > 5000: 
                 # Filter out face: Check if contour is in the TOP 40% of the frame
                 # Face is usually at the top, hand is usually in the middle/bottom
                 M = cv2.moments(max_contour)
@@ -97,45 +97,24 @@ class ImageProcessor:
                     raw_target_width = int(20 + (norm_dist * 400))
                     raw_target_width = max(40, min(raw_target_width, 320))
                     
-                    # Gesture Logic
+                    # Gesture Logic using Hull Ratio
+                    # Fist is compact (hull area ~ contour area)
+                    # Open hand has gaps (hull area > contour area)
                     hull = cv2.convexHull(max_contour)
-                    hull_indices = cv2.convexHull(max_contour, returnPoints=False)
+                    hull_area = cv2.contourArea(hull)
                     
-                    try:
-                        defects = cv2.convexityDefects(max_contour, hull_indices)
-                        count_defects = 0
+                    if hull_area > 0:
+                        # Ratio: 1.0 = perfect match (fist), > 1.0 = gaps (open)
+                        solidity = area / hull_area
                         
-                        if defects is not None:
-                            for i in range(defects.shape[0]):
-                                s, e, f, d = defects[i, 0]
-                                start = tuple(max_contour[s][0])
-                                end = tuple(max_contour[e][0])
-                                far = tuple(max_contour[f][0])
-                                
-                                # Filter small/shallow defects (fist has shallow bumps)
-                                # Only count deep defects (between fingers of open hand)
-                                if d > 8000:
-                                    a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
-                                    b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
-                                    c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
-                                    angle = math.acos((b**2 + c**2 - a**2) / (2*b*c)) * 57
-                                    if angle <= 90:
-                                        count_defects += 1
-                        
-                        # Logic:
-                        # No Hand = Red (Default above)
-                        # Open Hand = defects visible between fingers -> Green
-                        # Fist = no defects (closed shape) -> Blue
-                        
-                        if count_defects >= 2:
-                            raw_theme = "neon-green" # Open Hand
-                        elif count_defects == 0:
-                            raw_theme = "neon-blue"  # Fist
+                        # Fist: solidity close to 1.0 (compact)
+                        # Open hand: solidity lower (gaps between fingers)
+                        if solidity > 0.85:
+                            raw_theme = "neon-blue"  # Fist (compact)
                         else:
-                            raw_theme = "neon-green" # 1 defect = likely open
-                            
-                    except Exception:
-                        raw_theme = "neon-blue" # Fallback if hull fails
+                            raw_theme = "neon-green" # Open Hand (has gaps)
+                    else:
+                        raw_theme = "neon-green" # Fallback
         
         # Smoothing
         self.res_history.append(raw_target_width)

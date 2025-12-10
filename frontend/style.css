@@ -38,6 +38,7 @@ body {
     justify-content: center;
     align-items: center;
     mix-blend-mode: screen;
+    transition: color 0.5s ease, text-shadow 0.5s ease;
 }
 
 /* Themes */

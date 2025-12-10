@@ -26,7 +26,8 @@ body {
     white-space: pre;
     font-size: 8px;
     /* Dynamic */
-    line-height: 0.6;
+    line-height: 1.15;
+    /* Standard mono aspect ratio (~0.55 w/h) */
     /* Tweak for aspect ratio */
     transform: scaleX(1);
     /* Correction if needed */
@@ -40,6 +41,11 @@ body {
 }
 
 /* Themes */
+.theme-default {
+    color: var(--neon-red);
+    text-shadow: 0 0 3px var(--neon-red);
+}
+
 .theme-neon-green {
     color: var(--neon-green);
     text-shadow: 0 0 2px var(--neon-green);

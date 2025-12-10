@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import math
+from collections import deque
+import statistics
 
 class ImageProcessor:
     def __init__(self):
@@ -10,6 +12,10 @@ class ImageProcessor:
         # Skin color range (YCrCb) - Generally better than HSV
         self.lower_skin = np.array([0, 133, 77], dtype=np.uint8)
         self.upper_skin = np.array([255, 173, 127], dtype=np.uint8)
+        
+        # Smoothing History
+        self.res_history = deque(maxlen=5) # Smooth resolution (Responsive)
+        self.theme_history = deque(maxlen=15) # Debounce theme (Stable)
 
     def frame_to_ascii(self, frame, width=100):
         # 1. Resize
@@ -20,14 +26,13 @@ class ImageProcessor:
         resized = cv2.resize(frame, (width, new_height))
         
         # 2. Grayscale & Contrast enhancement (CLAHE)
-        # This makes details visible even in bad lighting
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        # This makes details visible even in bad lighting
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         gray = clahe.apply(gray)
         
         # 3. Map to characters
-        # Using a ramp that has good visual weight distribution
-        # " " is black. "@" is white (full pixel density).
+        # Standard balanced ramp for better detail preservation
         chars = [" ", ".", ":", "-", "=", "+", "*", "#", "%", "@"]
         
         lines = []
@@ -59,21 +64,24 @@ class ImageProcessor:
         
         contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Base resolution higher for better readability
-        target_width = 120 
-        color_theme = "default"
+        # Default: No Hand -> Red
+        raw_target_width = 40 
+        raw_theme = "neon-red"
         
         if contours:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            if area > 3000: 
-                # Distance Logic
-                ratio = area / (proc_frame.shape[0] * proc_frame.shape[1])
-                ratio = max(0.0, min(ratio, 0.8))
+            # Lower threshold to detect hand earlier
+            if area > 1000: 
+                # Distance Logic: Map Area Ratio to Width
+                frame_area = proc_frame.shape[0] * proc_frame.shape[1]
+                ratio = area / frame_area
                 
-                # Dynamic Resolution: 120 (Far) -> 250 (Close)
-                target_width = int(120 + (ratio * 130))
+                norm_dist = math.sqrt(ratio) # 0.1 to 0.7 typically
+                
+                raw_target_width = int(20 + (norm_dist * 400))
+                raw_target_width = max(40, min(raw_target_width, 320))
                 
                 # Gesture Logic
                 hull = cv2.convexHull(max_contour)
@@ -90,6 +98,7 @@ class ImageProcessor:
                             end = tuple(max_contour[e][0])
                             far = tuple(max_contour[f][0])
                             
+                            # Filter small defects
                             if d > 1000:
                                 a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
                                 b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
@@ -98,21 +107,37 @@ class ImageProcessor:
                                 if angle <= 90:
                                     count_defects += 1
                     
+                    # Logic:
+                    # No Hand = Red (Default above)
+                    # Open Hand (Front/Back) = High Defects -> Green
+                    # Side/Fist (Closed shape) = Low Defects -> Blue
+                    
                     if count_defects >= 3:
-                        color_theme = "neon-green"
-                    elif count_defects == 0:
-                        color_theme = "neon-red"
+                        raw_theme = "neon-green"
                     else:
-                        color_theme = "neon-blue"
+                        raw_theme = "neon-blue"
                         
                 except Exception:
-                    pass
+                    raw_theme = "neon-blue" # Fallback if hull fails
+        
+        # Smoothing
+        self.res_history.append(raw_target_width)
+        self.theme_history.append(raw_theme)
+        
+        # Average Resolution
+        smoothed_width = int(sum(self.res_history) / len(self.res_history))
+        
+        # Mode Theme (Most frequent in history)
+        try:
+            smoothed_theme = statistics.mode(self.theme_history)
+        except:
+            smoothed_theme = self.theme_history[-1]
         
         # Generate ASCII
-        ascii_lines = self.frame_to_ascii(frame, width=target_width)
+        ascii_lines = self.frame_to_ascii(frame, width=smoothed_width)
         
         return {
             "ascii": ascii_lines,
-            "theme": color_theme,
-            "resolution": target_width
+            "theme": smoothed_theme,
+            "resolution": smoothed_width
         }

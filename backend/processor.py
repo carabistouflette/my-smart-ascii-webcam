@@ -72,8 +72,8 @@ class ImageProcessor:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Threshold to prevent noise but still detect hand
-            if area > 5000: 
+            # Lower threshold to detect hand from far away
+            if area > 2000: 
                 # Filter out face: Check if contour is in the TOP 40% of the frame
                 # Face is usually at the top, hand is usually in the middle/bottom
                 M = cv2.moments(max_contour)

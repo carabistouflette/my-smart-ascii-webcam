@@ -92,32 +92,34 @@ class ImageProcessor:
                     frame_area = proc_frame.shape[0] * proc_frame.shape[1]
                     ratio = area / frame_area
                     
-                    # More aggressive scaling for visible effect
-                    # Far (small ratio ~0.02) -> 20 chars (very blocky)
-                    # Close (large ratio ~0.5) -> 400 chars (detailed)
                     norm_dist = math.sqrt(ratio)
-                    
                     raw_target_width = int(20 + (norm_dist * 600))
                     raw_target_width = max(20, min(raw_target_width, 400))
                     
-                    # Gesture Logic using Hull Ratio
-                    # Fist is compact (hull area ~ contour area)
-                    # Open hand has gaps (hull area > contour area)
-                    hull = cv2.convexHull(max_contour)
-                    hull_area = cv2.contourArea(hull)
+                    # Gesture Logic using Circularity and Aspect Ratio
+                    # Fist = circular/square, compact
+                    # Open hand = elongated due to fingers, less circular
                     
-                    if hull_area > 0:
-                        # Ratio: 1.0 = perfect match (fist), > 1.0 = gaps (open)
-                        solidity = area / hull_area
-                        
-                        # Fist: solidity close to 1.0 (compact)
-                        # Open hand: solidity lower (gaps between fingers)
-                        if solidity > 0.85:
-                            raw_theme = "neon-blue"  # Fist (compact)
-                        else:
-                            raw_theme = "neon-green" # Open Hand (has gaps)
+                    # Get bounding rectangle
+                    x, y, w, h = cv2.boundingRect(max_contour)
+                    aspect_ratio = float(w) / h if h > 0 else 1.0
+                    
+                    # Circularity = 4*pi*area / perimeter^2 (1.0 = perfect circle)
+                    perimeter = cv2.arcLength(max_contour, True)
+                    if perimeter > 0:
+                        circularity = 4 * math.pi * area / (perimeter * perimeter)
                     else:
-                        raw_theme = "neon-green" # Fallback
+                        circularity = 0
+                    
+                    # Fist: High circularity (>0.4), aspect ratio close to 1
+                    # Open hand: Lower circularity (<0.35), aspect ratio varies
+                    
+                    # Debug: print(f"Circ: {circularity:.2f}, AR: {aspect_ratio:.2f}")
+                    
+                    if circularity > 0.45 and 0.7 < aspect_ratio < 1.4:
+                        raw_theme = "neon-blue"  # Fist (round, compact)
+                    else:
+                        raw_theme = "neon-green" # Open Hand (irregular)
         
         # Smoothing
         self.res_history.append(raw_target_width)

@@ -123,13 +123,15 @@ class ImageProcessor:
                         
                         # Logic:
                         # No Hand = Red (Default above)
-                        # Open Hand (Front/Back) = High Defects -> Green
-                        # Side/Fist (Closed shape) = Low Defects -> Blue
+                        # Open Hand = defects visible between fingers -> Green
+                        # Fist = no defects (closed shape) -> Blue
                         
-                        if count_defects >= 3:
-                            raw_theme = "neon-green"
+                        if count_defects >= 2:
+                            raw_theme = "neon-green" # Open Hand
+                        elif count_defects == 0:
+                            raw_theme = "neon-blue"  # Fist
                         else:
-                            raw_theme = "neon-blue"
+                            raw_theme = "neon-green" # 1 defect = likely open
                             
                     except Exception:
                         raw_theme = "neon-blue" # Fallback if hull fails

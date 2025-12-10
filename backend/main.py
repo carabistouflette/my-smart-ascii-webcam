@@ -40,8 +40,13 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 result = processor.process(frame)
                 await websocket.send_json(result)
+            except WebSocketDisconnect:
+                logger.info("Client disconnected during send")
+                break
             except Exception as e:
-                logger.error(f"Processing error: {e}")
+                # If pipe broken, break
+                logger.error(f"Processing/Send error: {e}")
+                break
                 
             # Cap frame rate slightly to avoid overwhelming
             await asyncio.sleep(0.03) # ~30 FPS
@@ -51,10 +56,10 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Error: {e}")
     finally:
-        if camera:
-            camera.release()
-            logger.info("Camera released")
-
+        # Do not release the global camera!
+        # if camera:
+        #    camera.release()
+        logger.info("Connection closed")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

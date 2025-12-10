@@ -74,51 +74,65 @@ class ImageProcessor:
             
             # Increased threshold to prevent background noise from triggering hand detection
             if area > 10000: 
-                # Distance Logic: Map Area Ratio to Width
-                frame_area = proc_frame.shape[0] * proc_frame.shape[1]
-                ratio = area / frame_area
+                # Filter out face: Check if contour is in the TOP 40% of the frame
+                # Face is usually at the top, hand is usually in the middle/bottom
+                M = cv2.moments(max_contour)
+                is_hand = True
                 
-                norm_dist = math.sqrt(ratio) # 0.1 to 0.7 typically
-                
-                raw_target_width = int(20 + (norm_dist * 400))
-                raw_target_width = max(40, min(raw_target_width, 320))
-                
-                # Gesture Logic
-                hull = cv2.convexHull(max_contour)
-                hull_indices = cv2.convexHull(max_contour, returnPoints=False)
-                
-                try:
-                    defects = cv2.convexityDefects(max_contour, hull_indices)
-                    count_defects = 0
+                if M["m00"] > 0:
+                    cy = int(M["m01"] / M["m00"]) # Centroid Y
+                    frame_height = proc_frame.shape[0]
                     
-                    if defects is not None:
-                        for i in range(defects.shape[0]):
-                            s, e, f, d = defects[i, 0]
-                            start = tuple(max_contour[s][0])
-                            end = tuple(max_contour[e][0])
-                            far = tuple(max_contour[f][0])
-                            
-                            # Filter small defects
-                            if d > 1000:
-                                a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
-                                b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
-                                c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
-                                angle = math.acos((b**2 + c**2 - a**2) / (2*b*c)) * 57
-                                if angle <= 90:
-                                    count_defects += 1
+                    # If centroid is in top 40%, it's likely the face -> ignore
+                    if cy < frame_height * 0.4:
+                        is_hand = False
+                
+                if is_hand:
+                    # Distance Logic: Map Area Ratio to Width
+                    frame_area = proc_frame.shape[0] * proc_frame.shape[1]
+                    ratio = area / frame_area
                     
-                    # Logic:
-                    # No Hand = Red (Default above)
-                    # Open Hand (Front/Back) = High Defects -> Green
-                    # Side/Fist (Closed shape) = Low Defects -> Blue
+                    norm_dist = math.sqrt(ratio) # 0.1 to 0.7 typically
                     
-                    if count_defects >= 3:
-                        raw_theme = "neon-green"
-                    else:
-                        raw_theme = "neon-blue"
+                    raw_target_width = int(20 + (norm_dist * 400))
+                    raw_target_width = max(40, min(raw_target_width, 320))
+                    
+                    # Gesture Logic
+                    hull = cv2.convexHull(max_contour)
+                    hull_indices = cv2.convexHull(max_contour, returnPoints=False)
+                    
+                    try:
+                        defects = cv2.convexityDefects(max_contour, hull_indices)
+                        count_defects = 0
                         
-                except Exception:
-                    raw_theme = "neon-blue" # Fallback if hull fails
+                        if defects is not None:
+                            for i in range(defects.shape[0]):
+                                s, e, f, d = defects[i, 0]
+                                start = tuple(max_contour[s][0])
+                                end = tuple(max_contour[e][0])
+                                far = tuple(max_contour[f][0])
+                                
+                                # Filter small defects
+                                if d > 1000:
+                                    a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
+                                    b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
+                                    c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
+                                    angle = math.acos((b**2 + c**2 - a**2) / (2*b*c)) * 57
+                                    if angle <= 90:
+                                        count_defects += 1
+                        
+                        # Logic:
+                        # No Hand = Red (Default above)
+                        # Open Hand (Front/Back) = High Defects -> Green
+                        # Side/Fist (Closed shape) = Low Defects -> Blue
+                        
+                        if count_defects >= 3:
+                            raw_theme = "neon-green"
+                        else:
+                            raw_theme = "neon-blue"
+                            
+                    except Exception:
+                        raw_theme = "neon-blue" # Fallback if hull fails
         
         # Smoothing
         self.res_history.append(raw_target_width)

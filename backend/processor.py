@@ -72,10 +72,10 @@ class ImageProcessor:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Moderate threshold
-            if area > 4000: 
-                # Filter out face: Check if contour is in the TOP 40% of the frame
-                # Face is usually at the top, hand is usually in the middle/bottom
+            # High threshold to filter noise
+            if area > 8000: 
+                # Filter out face: Check if contour is in the TOP 50% of the frame
+                # Face is usually at the top, hand should be lower
                 M = cv2.moments(max_contour)
                 is_hand = True
                 
@@ -83,8 +83,8 @@ class ImageProcessor:
                     cy = int(M["m01"] / M["m00"]) # Centroid Y
                     frame_height = proc_frame.shape[0]
                     
-                    # If centroid is in top 40%, it's likely the face -> ignore
-                    if cy < frame_height * 0.4:
+                    # If centroid is in top 50%, it's likely the face -> ignore
+                    if cy < frame_height * 0.5:
                         is_hand = False
                 
                 if is_hand:

@@ -72,8 +72,8 @@ class ImageProcessor:
             max_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(max_contour)
             
-            # Balance: detect far hand but filter noise
-            if area > 3500: 
+            # Higher threshold to avoid false positives
+            if area > 6000: 
                 # Filter out face: Check if contour is in the TOP 40% of the frame
                 # Face is usually at the top, hand is usually in the middle/bottom
                 M = cv2.moments(max_contour)

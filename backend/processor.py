@@ -112,8 +112,9 @@ class ImageProcessor:
                                 end = tuple(max_contour[e][0])
                                 far = tuple(max_contour[f][0])
                                 
-                                # Filter small defects
-                                if d > 1000:
+                                # Filter small/shallow defects (fist has shallow bumps)
+                                # Only count deep defects (between fingers of open hand)
+                                if d > 8000:
                                     a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
                                     b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
                                     c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
